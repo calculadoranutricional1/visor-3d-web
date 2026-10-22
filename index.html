@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Visor 3D Mobile</title>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #090a10;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #fff;
+      touch-action: none; /* Evita que el navegador del celular intercepte gestos */
+    }
+
+    /* Visor 3D a pantalla completa */
+    model-viewer {
+      width: 100vw;
+      height: 100vh;
+      background-color: #090a10;
+      --poster-color: #090a10;
+      touch-action: none; /* Permite rotación 360° fluida sin conflicto de scroll */
+    }
+
+    /* Barra superior */
+    #topbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      padding: env(safe-area-inset-top, 10px) 14px 10px 14px;
+      background: linear-gradient(180deg, rgba(9,10,16,0.95) 0%, rgba(9,10,16,0.6) 75%, transparent 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none; /* No bloquea el toque en el lienzo 3D */
+    }
+
+    .top-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #94a3b8;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .count-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+
+    /* Selector deslizante de modelos */
+    .selector {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+      pointer-events: auto; /* Solo los botones reciben toques */
+      touch-action: pan-x;   /* Permite scroll horizontal fluido solo en los botones */
+    }
+
+    .selector::-webkit-scrollbar {
+      display: none;
+    }
+
+    .btn {
+      flex: 0 0 auto;
+      padding: 8px 14px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn.active {
+      background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+      color: #ffffff;
+      border-color: transparent;
+      box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+    }
+
+    /* Indicador inferior */
+    #hint {
+      position: fixed;
+      bottom: max(env(safe-area-inset-bottom, 14px), 14px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 11px;
+      color: #cbd5e1;
+      pointer-events: none;
+      z-index: 20;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<header id="topbar">
+  <div class="top-header">
+    <div class="title">
+      <span>🚗</span>
+      <span>Modelos GLB</span>
+    </div>
+    <span class="count-badge" id="model-count">Cargando...</span>
+  </div>
+
+  <div class="selector" id="btn-container"></div>
+</header>
+
+<!-- 
+  Ajustes táctiles optimizados:
+  - touch-action="none": control táctil 100% nativo 3D sin fricción de scroll vertical
+  - camera-orbit: órbita inicial equilibrada
+  - min/max-camera-orbit: libertad de rotación en todos los ángulos
+  - interaction-prompt="none": desactiva animaciones de ayuda que entorpecen el primer toque
+-->
+<model-viewer
+  id="viewer"
+  camera-controls
+  touch-action="none"
+  interpolation-decay="100"
+  interaction-prompt="none"
+  shadow-intensity="1"
+  exposure="1.2"
+  ar>
+</model-viewer>
+
+<div id="hint">👆 1 dedo: rotar 360° · ✌️ 2 dedos: zoom / mover</div>
+
+<script>
+  const viewer = document.getElementById('viewer');
+  const btnContainer = document.getElementById('btn-container');
+  const modelCount = document.getElementById('model-count');
+
+  async function loadModelsList() {
+    try {
+      const res = await fetch('/api/models');
+      const files = await res.json();
+
+      if (!files || files.length === 0) {
+        modelCount.textContent = '0 archivos';
+        btnContainer.innerHTML = '<span style="font-size:12px;color:#94a3b8;">No hay archivos .glb</span>';
+        return;
+      }
+
+      modelCount.textContent = `${files.length} modelos`;
+      btnContainer.innerHTML = '';
+
+      files.forEach((file, index) => {
+        const btn = document.createElement('button');
+        btn.className = 'btn' + (index === 0 ? ' active' : '');
+        const displayName = file.replace(/\.glb$/i, '');
+        btn.textContent = displayName;
+
+        btn.onclick = () => {
+          document.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          viewer.src = `/models/${encodeURIComponent(file)}`;
+        };
+
+        btnContainer.appendChild(btn);
+      });
+
+      // Cargar primer modelo
+      viewer.src = `/models/${encodeURIComponent(files[0])}`;
+
+    } catch (e) {
+      console.error(e);
+      modelCount.textContent = 'Error';
+    }
+  }
+
+  loadModelsList();
+</script>
+
+</body>
+</html>
