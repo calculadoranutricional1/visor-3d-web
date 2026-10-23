@@ -11,8 +11,6 @@ Visor web ligero y responsivo diseñado para previsualizar modelos 3D en formato
 
 ## 📦 Modelos Incluidos
 
-- `white_mesh.glb`
-- `meshy-model.glb`
 - `meshy-model_1.glb`
 
 ## 🛠️ Ejecución Local
